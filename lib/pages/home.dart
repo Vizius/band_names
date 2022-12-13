@@ -1,7 +1,11 @@
 import 'dart:io';
+import 'dart:math';
 
+import 'package:band_names/services/socket_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:mrx_charts/mrx_charts.dart';
+import 'package:provider/provider.dart';
 
 import '../models/band.dart';
 
@@ -15,23 +19,90 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
 
-  List<Band> bands=[
-    Band(id: '1', name: 'Keller', votes: 0),
-    Band(id: '2', name: 'Hazy', votes: 0),
-    Band(id: '3', name: 'Kolsh', votes: 0),
-    Band(id: '4', name: 'Summer', votes: 0),
-  ];
+  List<Band> bands=[];
+
+  @override
+  void initState() {
+
+    final socketService2 = Provider.of<SocketService>(context, listen: false);
+
+    socketService2.socket.on('bands-active', _handleActiveBands);
+
+    super.initState();
+    
+  }
+
+  _handleActiveBands(dynamic payload)
+  {
+    this.bands = (payload as List).map((band) => Band.fromMap(band)).toList();
+
+    setState(() {});
+  }
+  
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    final socketService2 = Provider.of<SocketService>(context, listen: false);
+
+    socketService2.socket.off('bands-active');
+    super.dispose();
+  }
  
   @override
   Widget build(BuildContext context) {
+     
+    final socketService2 = Provider.of<SocketService>(context);
+
     return  Scaffold(
       appBar: AppBar(
         centerTitle: true,
         title: Text('BandNames'),
+        actions: [
+          Container(
+            margin: EdgeInsets.only(right: 10),
+
+            child: 
+            socketService2.serverStatus == ServerStatus.Online 
+            ?
+            Icon(Icons.offline_bolt, color: Colors.green,)
+            :Icon(Icons.offline_bolt, color: Colors.red,)
+          )
+        ],
       ),
-      body: ListView.builder(
-        itemCount: bands.length,
-        itemBuilder:(context, i) =>_bandTitle(bands[i])
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              color: Colors.grey[100],
+              constraints: const BoxConstraints(
+              maxHeight: 300,
+              maxWidth: double.infinity,
+              ),
+              padding: const EdgeInsets.all(0.5),
+              child: Stack(children: [
+                _showGraph(),
+                Container(
+                  padding: EdgeInsets.only(top: 90),
+                  width: double.infinity,
+                  height: 200,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(60),
+                    child: Image(image: AssetImage('assets/beer2.jpeg')),
+                  
+                  ),
+                )
+              ], ),
+            ),
+            Divider(),
+            Expanded(
+              child: ListView.builder(
+              itemCount: bands.length,
+              itemBuilder:(context, i) =>_bandTitle(bands[i])
+            )
+            ),
+          
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.add),
@@ -42,13 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _bandTitle(Band banda) {
+
+    final socketService = Provider.of<SocketService>(context, listen: false);
+
     return Dismissible(
       key: Key(banda.id),
       direction: DismissDirection.startToEnd,
-      onDismissed: (direction) {
-        
-        print('id: ' + banda.id);
-      },
+      onDismissed: (direction) => socketService.emit('delete-band',{'id':banda.id} ),
       background: Container(
         padding: EdgeInsets.only(left: 8.0),
         color: Colors.red,
@@ -64,9 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         title:Text(banda.name),
         trailing: Text('${banda.votes}',style: TextStyle(fontSize: 20),),
-        onTap: () {
-          print(banda.name);
-        },
+        onTap: () => socketService.socket.emit('vote-band',{'id': banda.id }),
+        
     
       ),
     );
@@ -87,10 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
               controller: textControler
             ),
             actions: [
-              MaterialButton(onPressed: () {
-              addBandToList(textControler.text);
-                
-              },
+              MaterialButton(onPressed: () => addBandToList(textControler.text),
               child: Text('Add'),
               elevation: 5,
               textColor: Colors.cyan,
@@ -125,27 +192,71 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
     }
-
-    
-
-
-
   }
 
   void addBandToList (String name)
   {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+
     if(name.length > 1)
     {
-      this.bands.add(new Band(
-        id: DateTime.now().toString(),
-        name: name, 
-        votes: 0));
-      setState(() {
-        
-      });
+      socketService.socket.emit('add-band' ,{'name': name});
     }
-    print(name);
     Navigator.pop(context);
   }
 
+  Widget _showGraph()
+  {
+    return Chart(
+      layers: layers(),);
+
+    
+  }
+  List<ChartLayer> layers() {
+
+  return [
+    ChartGroupPieLayer(
+      items: List.generate(
+        1,
+        (index) => List.generate(
+          bands.length,
+          (index) => ChartGroupPieDataItem(
+              amount:bands[index].votes.toDouble(),
+              color:  [
+                  Colors.orangeAccent,
+                  Colors.pinkAccent,
+                  Colors.redAccent,
+                  Colors.blueAccent,
+                  Colors.cyanAccent,
+                  Colors.tealAccent,
+                ][Random().nextInt(6)],
+              
+              label: bands[index].name.toString()
+              ),
+        ),
+      ),
+      settings: ChartGroupPieSettings(),
+    ),
+    ChartTooltipLayer(
+      shape: () => ChartTooltipPieShape<ChartGroupPieDataItem>(
+        onTextName: (item) => item.label,
+        onTextValue: (item) => 'Litros: ${item.amount.toString()}',
+        radius: 10.0,
+        backgroundColor: Colors.white,
+        padding: const EdgeInsets.all(12.0),
+        nameTextStyle: const TextStyle(
+          color: Color(0xFF8043F9),
+          fontWeight: FontWeight.w700,
+          height: 1.47,
+          fontSize: 12.0,
+        ),
+        valueTextStyle: const TextStyle(
+          color: Color(0xFF1B0E41),
+          fontWeight: FontWeight.w700,
+          fontSize: 12.0,
+        ),
+      ),
+    )
+  ];
+  }
 }
