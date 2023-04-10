@@ -1,14 +1,19 @@
-import 'package:band_names/pages/home.dart';
-import 'package:band_names/pages/status.dart';
+import 'package:band_names/pages/front.dart';
 import 'package:band_names/services/socket_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 
-void main() => runApp(MyApp());
+void main(){
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  runApp(MyApp());
+} 
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    FlutterNativeSplash.remove();
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create:  (context) => SocketService(),)
@@ -16,10 +21,9 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Material App',
-        initialRoute: 'home',
+        initialRoute: 'front',
         routes: {
-          'home':(context) => HomeScreen(),
-          'status':(context) => StatusScreen(),
+          'front'  :(context) => FrontScreen()
         },
       ),
     );

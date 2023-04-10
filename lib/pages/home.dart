@@ -1,147 +1,214 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:band_names/services/invoice_service.dart';
 import 'package:band_names/services/socket_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mrx_charts/mrx_charts.dart';
 import 'package:provider/provider.dart';
-
 import '../models/band.dart';
 
 class HomeScreen extends StatefulWidget {
-   
-  const HomeScreen({Key? key}) : super(key: key);
+
+  
+  final String table;
+  HomeScreen(this.table, {Key? key}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
+  int number = 0;
   List<Band> bands=[];
-
-  @override
-  void initState() {
-
-    final socketService2 = Provider.of<SocketService>(context, listen: false);
-
-    socketService2.socket.on('bands-active', _handleActiveBands);
-
-    super.initState();
-    
-  }
+  bool _visible = true;
 
   _handleActiveBands(dynamic payload)
   {
     this.bands = (payload as List).map((band) => Band.fromMap(band)).toList();
-
-    setState(() {});
+    if(mounted)
+    {
+      (context as Element).markNeedsBuild();
+      setState(() {});
+    }
   }
-  
-  @override
-  void dispose() {
-    // TODO: implement dispose
-    final socketService2 = Provider.of<SocketService>(context, listen: false);
-
-    socketService2.socket.off('bands-active');
-    super.dispose();
-  }
- 
   @override
   Widget build(BuildContext context) {
-     
+
     final socketService2 = Provider.of<SocketService>(context);
 
-    return  Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: Text('BandNames'),
-        actions: [
-          Container(
-            margin: EdgeInsets.only(right: 10),
-
-            child: 
-            socketService2.serverStatus == ServerStatus.Online 
-            ?
-            Icon(Icons.offline_bolt, color: Colors.green,)
-            :Icon(Icons.offline_bolt, color: Colors.red,)
-          )
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: Colors.grey[100],
-              constraints: const BoxConstraints(
-              maxHeight: 300,
-              maxWidth: double.infinity,
+    socketService2.socket.on('bands-active', _handleActiveBands);
+    setState(() {
+      
+    });
+    return  StatefulBuilder(
+      
+      builder: (context, refresh) {
+        return Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(70),
+          child: AppBar(
+            centerTitle: true,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            flexibleSpace: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                decoration: BoxDecoration(
+                  image:DecorationImage(
+                    image: AssetImage('assets/Bunemann.jpg'),fit: BoxFit.cover)
+                ),
               ),
-              padding: const EdgeInsets.all(0.5),
-              child: Stack(children: [
-                _showGraph(),
-                Container(
-                  padding: EdgeInsets.only(top: 90),
-                  width: double.infinity,
-                  height: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(60),
-                    child: Image(image: AssetImage('assets/beer2.jpeg')),
-                  
-                  ),
-                )
-              ], ),
             ),
-            Divider(),
-            Expanded(
-              child: ListView.builder(
-              itemCount: bands.length,
-              itemBuilder:(context, i) =>_bandTitle(bands[i])
-            )
-            ),
-          
-          ],
+            title: Text(widget.table),
+            leading: IconButton(onPressed: () {
+              Navigator.pop(context);
+            }, icon: Icon(Icons.arrow_back_ios_new)),
+            actions: [
+              Container(
+                margin: EdgeInsets.only(right: 10),
+                child: 
+                socketService2.serverStatus == ServerStatus.Online 
+                ?
+                Icon(Icons.offline_bolt, color: Colors.green)
+                :Icon(Icons.offline_bolt, color: Colors.red)
+              ),
+            ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.add),
-        elevation: 1,
-        onPressed: addNewBand
-      ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                color: Colors.grey[100],
+                constraints: const BoxConstraints(
+                maxHeight: 300,
+                maxWidth: double.infinity,
+                ),
+                padding: const EdgeInsets.all(0.5),
+                child: Stack(
+                  children: [
+                  Container(
+                    padding: EdgeInsets.all(50),
+                    width: double.infinity,
+                    height: 280,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(60),
+                      child: Image(image: AssetImage('assets/beer2.jpeg')),
+                    
+                    ),
+                  ),
+                  _showGraph(),
+                  Center(
+                    child: AnimatedOpacity(
+                    opacity: _visible? 1.0 : 0.0,
+                    duration: Duration(microseconds: 300),
+                    child: MaterialButton(onPressed: _visible==true? () {
+                      socketService2.emit('delete-band',{'nameProduct':'1'} );
+                      setState(() {
+                        _visible = !_visible ;
+                      });
+                    }:null,child: Text('Mostrar Productos', style: TextStyle(color: Colors.black),),
+                    color: Colors.amber,shape: StadiumBorder(),),),
+                  ),
+                  if(_visible==false)
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: FloatingActionButton(
+                      child: Icon(Icons.add),
+                      elevation: 1,
+                      onPressed: addNewBand
+                    ),
+                  ),
+                  Positioned(
+                  left: 10,
+                  bottom: 0,
+                  child: MaterialButton(
+                    shape: StadiumBorder(),
+                    child: Text('Generar Pdf', style: TextStyle(color: Colors.black),),
+                    onPressed: () async{
+                      createPdf();
+                    },
+                  ),
+                  ),
+                ]),
+              ),
+              Divider(),
+              Expanded(
+                child: 
+                ListView.builder(
+                itemCount: bands.length,
+                itemBuilder:(context, i) =>_bandTitle(bands[i]))
+              ),
+            ],
+          ),
+        ),);
+      },
     );
   }
 
   Widget _bandTitle(Band banda) {
 
     final socketService = Provider.of<SocketService>(context, listen: false);
-
-    return Dismissible(
-      key: Key(banda.id),
-      direction: DismissDirection.startToEnd,
-      onDismissed: (direction) => socketService.emit('delete-band',{'id':banda.id} ),
-      background: Container(
-        padding: EdgeInsets.only(left: 8.0),
-        color: Colors.red,
-        child: Align(
-          child: Text('Delete Band',style: TextStyle(color: Colors.white,fontWeight: FontWeight.bold),),
-          alignment: Alignment.centerLeft,
-        ),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text(banda.name.substring(0,2), style: TextStyle(color: Colors.white),),
-          backgroundColor: Colors.cyan,
-        ),
-        title:Text(banda.name),
-        trailing: Text('${banda.votes}',style: TextStyle(fontSize: 20),),
-        onTap: () => socketService.socket.emit('vote-band',{'id': banda.id }),
-        
+    final  te = TextEditingController();
     
-      ),
+    return Column(
+      children: [
+        if(banda.nameTable.contains(widget.table))
+        Dismissible(
+        key: Key(banda.id),
+        direction: DismissDirection.startToEnd,
+        onDismissed: (direction) => socketService.emit('delete-band',{'id':banda.id} ),
+        background: Container(
+          padding: EdgeInsets.only(left: 8.0),
+          color: Colors.red,
+          child: Align(
+            child: Text('Delete Band',style: TextStyle(color: Colors.white,fontWeight: FontWeight.bold),),
+            alignment: Alignment.centerLeft,
+          ),
+        ),
+        child: Padding(
+          padding:  EdgeInsets.symmetric(horizontal: 2),
+          child: ListTile(
+            leading: CircleAvatar(
+              child: 
+              Text(banda.nameProduct.substring(0,2), 
+              style: TextStyle(color: Colors.white),),
+              backgroundColor: Colors.cyan,
+            ),
+            title:Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: MediaQuery.of(context).size.width * 0.35,
+                  child: Text(banda.nameProduct,maxLines: 1,overflow: TextOverflow.ellipsis)),
+                IconButton(onPressed: () {
+                  socketService.socket.emit('vote-band',{'id': banda.id });
+                }, icon: Icon(Icons.arrow_drop_up,color: Colors.black,)),
+                Container(
+                  height: 50,
+                  width: 50,
+                  child: TextField(onSubmitted: (te){
+                    banda.votes2 = int.parse(te);
+                    socketService.emit('vote-band3',{'id': banda.id , 'votes2': banda.votes2 });
+                  },
+                  controller: te,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: '${banda.votes}'
+                  ) ,style: TextStyle(fontSize: 20),),
+                ),
+                IconButton(onPressed: () {
+                  socketService.socket.emit('vote-band2',{'id': banda.id });
+                }, icon: Icon(Icons.arrow_drop_down,color: Colors.black,)),
+              ],)
+          ),
+        ),
+        ),],
     );
   }
-
   addNewBand()
   {
     final textControler = TextEditingController();
@@ -152,13 +219,13 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context, 
         builder: (context) {
           return AlertDialog(
-            title: Text('New Band Name:'),
+            title: Text('Nombre Producto:'),
             content: TextField(
               controller: textControler
             ),
             actions: [
-              MaterialButton(onPressed: () => addBandToList(textControler.text),
-              child: Text('Add'),
+              MaterialButton(onPressed: () => addBandToList(textControler.text, widget.table),
+              child: Text('Agregar'),
               elevation: 5,
               textColor: Colors.cyan,
               )
@@ -180,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
             CupertinoDialogAction(
               child: Text('Add'),
               isDefaultAction: true,
-              onPressed: () =>  addBandToList(textControler.text), 
+              onPressed: () =>  addBandToList(textControler.text, widget.table), 
             ),
             CupertinoDialogAction(
               child: Text('Dismiss'),
@@ -194,13 +261,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void addBandToList (String name)
+  void addBandToList (String name, String tables )
   {
     final socketService = Provider.of<SocketService>(context, listen: false);
 
     if(name.length > 1)
     {
-      socketService.socket.emit('add-band' ,{'name': name});
+      socketService.socket.emit('add-band' ,{'nameProduct': name, 'nameTable': tables});
     }
     Navigator.pop(context);
   }
@@ -209,8 +276,6 @@ class _HomeScreenState extends State<HomeScreen> {
   {
     return Chart(
       layers: layers(),);
-
-    
   }
   List<ChartLayer> layers() {
 
@@ -230,8 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Colors.cyanAccent,
                   Colors.tealAccent,
                 ][Random().nextInt(6)],
-              
-              label: bands[index].name.toString()
+              label: bands[index].nameProduct.toString()
               ),
         ),
       ),
@@ -240,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ChartTooltipLayer(
       shape: () => ChartTooltipPieShape<ChartGroupPieDataItem>(
         onTextName: (item) => item.label,
-        onTextValue: (item) => 'Litros: ${item.amount.toString()}',
+        onTextValue: (item) => 'Unidades: ${item.amount.toString()}',
         radius: 10.0,
         backgroundColor: Colors.white,
         padding: const EdgeInsets.all(12.0),
@@ -259,4 +323,6 @@ class _HomeScreenState extends State<HomeScreen> {
     )
   ];
   }
+  
+  
 }

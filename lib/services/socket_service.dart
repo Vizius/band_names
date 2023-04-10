@@ -27,14 +27,12 @@ class SocketService with ChangeNotifier{
 
   void _initConfig() {
     
-    // Dart client
-    this._socket = IO.io('http://192.168.1.13:3000/', OptionBuilder()
+    this._socket = IO.io('ip', OptionBuilder()
       .setTransports(['websocket']) 
       .enableAutoConnect()
       .setExtraHeaders({'foo': 'bar'})
       .build()
     );
-    
 
     this._socket.onConnect((_) {
       this._serverStatus = ServerStatus.Online;
@@ -50,11 +48,10 @@ class SocketService with ChangeNotifier{
 
     this._socket.on('nuevo-mensaje', (payload) =>
     {
-      print('nuevo-mensaje: $payload' )
+      print('nuevo-mensaje: $payload' ),
+      notifyListeners()
     });
   }
-
- 
 }
 
 
